@@ -311,35 +311,35 @@ export default function SlotMachine() {
         </div>
 
         {/* Botões */}
-        <div className="flex items-center justify-between gap-2">
-          <button
-            onClick={() => spin()}
-            disabled={isSpinning || balance < bet}
-            className={`flex-1 py-3 rounded-xl font-bold transition ${
-              isSpinning || balance < bet
-                ? "bg-gray-500 text-gray-200 cursor-not-allowed"
-                : "bg-yellow-300 text-purple-700 hover:scale-105"
-            }`}
-          >
-            {isSpinning ? "Girando..." : "SPIN"}
-          </button>
-
-          <button
-            onClick={() => setTurbo((t) => !t)}
-            className={`px-3 py-2 rounded-xl font-bold ${
-              turbo ? "bg-red-500" : "bg-blue-500 hover:bg-blue-600"
-            }`}
-          >
-            Turbo {turbo ? "ON" : "OFF"}
-          </button>
-
+        <div className="grid grid-cols-3 gap-2 items-center">
           <button
             onClick={() => setAutoSpin((a) => !a)}
-            className={`px-3 py-2 rounded-xl font-bold ${
+            className={`justify-self-start px-3 py-2 rounded-xl font-bold ${
               autoSpin ? "bg-green-500" : "bg-gray-600 hover:bg-gray-700"
             }`}
           >
             Auto {autoSpin ? "ON" : "OFF"}
+          </button>
+
+          <button
+            onClick={spin}
+            disabled={isSpinning || balance < bet}
+            className={`justify-self-center w-20 h-20 rounded-full flex items-center justify-center text-lg font-extrabold transition transform ${
+              isSpinning || balance < bet
+                ? "bg-gray-500 text-gray-200 cursor-not-allowed"
+                : "bg-yellow-300 text-purple-700 hover:scale-105 shadow-lg"
+            }`}
+          >
+            {isSpinning ? "..." : "SPIN"}
+          </button>
+
+          <button
+            onClick={() => setTurbo((t) => !t)}
+            className={`justify-self-end px-3 py-2 rounded-xl font-bold ${
+              turbo ? "bg-red-500" : "bg-blue-500 hover:bg-blue-600"
+            }`}
+          >
+            Turbo {turbo ? "ON" : "OFF"}
           </button>
         </div>
 
