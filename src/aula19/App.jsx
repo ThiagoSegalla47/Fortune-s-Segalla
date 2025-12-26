@@ -302,7 +302,7 @@ export default function SlotMachine() {
                 }
                 className="px-2 py-1 bg-purple-700 rounded"
               >
-                
+                −
               </button>
               <input
                 type="number"
