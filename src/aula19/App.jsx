@@ -1,16 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
-/**
- * Slot 3x3 - corrigido
- * - usa setBet (controle de aposta) para evitar warning do editor
- * - AutoSpin reescrito: só agenda próximo spin quando o atual terminar
- * - usa refs para evitar closures com estados obsoletos
- * - Turbo + WILD + multiplicador aleatório (maior chance de null)
- */
-
 const SYMBOLS = ["🐉", "🍀", "💰", "🔔", "🍒", "⭐", "💎"];
 
-const SYMBOL_PRIZES = {
+const BASE_SYMBOL_PRIZES = {
   "🐉": 4,
   "🍀": 2,
   "💰": 1,
@@ -19,6 +11,7 @@ const SYMBOL_PRIZES = {
   "⭐": 0.2,
   "💎": 10, // WILD, usado especial
 };
+
 // probabilidade: ~78% nada, 18% 2x, 3.5% 5x, 0.5% 10x (ajuste se quiser)
 function getMultiplier() {
   const r = Math.random();
@@ -40,7 +33,7 @@ export default function SlotMachine() {
   );
 
   const [balance, setBalance] = useState(1000);
-  const [bet, setBet] = useState(10); // agora usa setBet no input
+  const [bet, setBet] = useState(10);
   const [lastWin, setLastWin] = useState(0);
   const [multiplier, setMultiplier] = useState(null);
 
@@ -48,118 +41,125 @@ export default function SlotMachine() {
   const [turbo, setTurbo] = useState(false);
   const [autoSpin, setAutoSpin] = useState(false);
 
-  // refs para leitura/controle dentro de spin sem depender de closures
+  // NOVO: células destacadas (efeito especial)
+  const [highlightedCells, setHighlightedCells] = useState(() => new Set());
+
   const balanceRef = useRef(balance);
   const betRef = useRef(bet);
   const autoSpinRef = useRef(autoSpin);
   const spinningRef = useRef(isSpinning);
   const timeoutRef = useRef(null);
 
-  // sincroniza refs com estados
-
   // Atualiza os prêmios conforme solicitado
   const SYMBOL_PRIZES = {
-    "⭐": 0.2,   // Star
-    "🍒": 0.5,   // Cherry
-    "💰": 0.75,  // Bag
-    "🔔": 1,     // Bell
-    "🍀": 2,     // Lucky Clover
-    "🐉": 4,     // Dragon
-    "💎": 8      // Wild
+    "⭐": 0.2,  // Star
+    "🍒": 0.5,  // Cherry
+    "💰": 0.75, // Bag
+    "🔔": 1,    // Bell
+    "🍀": 2,    // Lucky Clover
+    "🐉": 4,    // Dragon
+    "💎": 8     // Wild
   };
+
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { betRef.current = bet; }, [bet]);
   useEffect(() => { autoSpinRef.current = autoSpin; }, [autoSpin]);
   useEffect(() => { spinningRef.current = isSpinning; }, [isSpinning]);
 
-  // util: calcula prêmio por linhas e diagonais (WILD substitui)
-  function calculateWin(finalGrid, baseBet, mult) {
+  // NOVO: calcula prêmio + células vencedoras
+  function calculateWinWithHighlights(finalGrid, baseBet, mult) {
     let payout = 0;
+    const winCells = new Set();
 
-    // Verifica linhas (3 linhas horizontais)
+    // helper para registrar células de uma linha
+    const markLine = (coords) => {
+      coords.forEach(([r, c]) => {
+        winCells.add(`${r}-${c}`);
+      });
+    };
+
+    // Linhas horizontais
     for (let r = 0; r < 3; r++) {
       const row = finalGrid[r];
       const nonWild = row.filter((s) => s !== "💎");
 
-      // se só wilds -> grande prêmio
       if (nonWild.length === 0) {
-        payout += baseBet * SYMBOL_PRIZES["💎"]; // 3 wilds -> prêmio especial
+        payout += baseBet * SYMBOL_PRIZES["💎"];
+        markLine([[r, 0], [r, 1], [r, 2]]);
         continue;
       }
 
-      // todos os símbolos não-wilds iguais?
       const target = nonWild[0];
       const allEqual = nonWild.every((s) => s === target);
 
       if (allEqual) {
-        // prêmio personalizado para 3 iguais (com wilds substituindo)
         payout += baseBet * SYMBOL_PRIZES[target];
+        markLine([[r, 0], [r, 1], [r, 2]]);
       }
     }
 
-    // Verifica diagonal principal (top-left para bottom-right)
+    // Diagonal principal
     const diag1 = [finalGrid[0][0], finalGrid[1][1], finalGrid[2][2]];
     const nonWildDiag1 = diag1.filter((s) => s !== "💎");
-
     if (nonWildDiag1.length === 0) {
       payout += baseBet * SYMBOL_PRIZES["💎"];
+      markLine([[0, 0], [1, 1], [2, 2]]);
     } else {
       const target = nonWildDiag1[0];
       const allEqual = nonWildDiag1.every((s) => s === target);
       if (allEqual) {
         payout += baseBet * SYMBOL_PRIZES[target];
+        markLine([[0, 0], [1, 1], [2, 2]]);
       }
     }
 
-    // Verifica diagonal secundária (top-right para bottom-left)
+    // Diagonal secundária
     const diag2 = [finalGrid[0][2], finalGrid[1][1], finalGrid[2][0]];
     const nonWildDiag2 = diag2.filter((s) => s !== "💎");
-
     if (nonWildDiag2.length === 0) {
       payout += baseBet * SYMBOL_PRIZES["💎"];
+      markLine([[0, 2], [1, 1], [2, 0]]);
     } else {
       const target = nonWildDiag2[0];
       const allEqual = nonWildDiag2.every((s) => s === target);
       if (allEqual) {
         payout += baseBet * SYMBOL_PRIZES[target];
+        markLine([[0, 2], [1, 1], [2, 0]]);
       }
     }
 
     if (mult) payout *= mult;
-    // arredonda para 2 casas
-    return Math.round(payout * 100) / 100;
+    payout = Math.round(payout * 100) / 100;
+
+    return { payout, winCells };
   }
 
-  // função de spin: faz animação por alguns "frames" e finaliza,
-  // depois, se autoSpin estiver ativo, agenda outro spin.
   function spin() {
-    if (spinningRef.current) return; // já rodando
+    if (spinningRef.current) return;
     if (balanceRef.current < betRef.current) {
-      // se faltar saldo, desliga autos se estiver ligado
       if (autoSpinRef.current) setAutoSpin(false);
       return;
     }
 
-    // inicia spin
     setIsSpinning(true);
     spinningRef.current = true;
 
-    // debita aposta
+    // limpa destaques ao iniciar novo spin
+    setHighlightedCells(new Set());
+
     setBalance((prev) => {
       const next = Math.round((prev - betRef.current) * 100) / 100;
       balanceRef.current = next;
       return next;
     });
 
-    // número de "frames" de rolagem
     const frames = turbo ? 6 : 12;
-    const frameDelay = turbo ? 60 : 100; // intervalo entre frames
+    const frameDelay = turbo ? 60 : 100;
 
     let frame = 0;
     clearTimeout(timeoutRef.current);
 
     function frameStep() {
-      // mostra símbolos aleatórios (efeito rolando)
       setGrid(
         Array.from({ length: 3 }).map(() =>
           Array.from({ length: 3 }).map(() => getRandomSymbol())
@@ -170,7 +170,6 @@ export default function SlotMachine() {
       if (frame < frames) {
         timeoutRef.current = setTimeout(frameStep, frameDelay);
       } else {
-        // resultado final
         const finalGrid = Array.from({ length: 3 }).map(() =>
           Array.from({ length: 3 }).map(() => getRandomSymbol())
         );
@@ -179,30 +178,31 @@ export default function SlotMachine() {
         const mult = getMultiplier();
         setMultiplier(mult);
 
-        const winnings = calculateWin(finalGrid, betRef.current, mult);
-        setLastWin(winnings);
+        const { payout, winCells } = calculateWinWithHighlights(
+          finalGrid,
+          betRef.current,
+          mult
+        );
+        setLastWin(payout);
+        setHighlightedCells(winCells);
 
-        if (winnings > 0) {
+        if (payout > 0) {
           setBalance((prev) => {
-            const next = Math.round((prev + winnings) * 100) / 100;
+            const next = Math.round((prev + payout) * 100) / 100;
             balanceRef.current = next;
             return next;
           });
         }
 
-        // fim do spin
         setIsSpinning(false);
         spinningRef.current = false;
 
-        // se AutoSpin ainda ativo, agenda o próximo spin (pequena pausa entre spins)
         if (autoSpinRef.current) {
           const pauseBetween = turbo ? 150 : 700;
           timeoutRef.current = setTimeout(() => {
-            // checa saldo antes de tentar novo spin
             if (autoSpinRef.current && balanceRef.current >= betRef.current) {
               spin();
             } else {
-              // desliga auto se sem saldo
               setAutoSpin(false);
             }
           }, pauseBetween);
@@ -210,61 +210,80 @@ export default function SlotMachine() {
       }
     }
 
-    // começa animação
     timeoutRef.current = setTimeout(frameStep, frameDelay);
   }
 
-  // limpa timeouts quando desmonta
   useEffect(() => {
     return () => {
       clearTimeout(timeoutRef.current);
     };
   }, []);
 
-  // quando usuário ativa AutoSpin manualmente, inicia um spin imediatamente
   useEffect(() => {
     if (autoSpin) {
-      // se já girando, espere terminar (o próprio spin agenda o próximo)
       if (!spinningRef.current) spin();
     } else {
-      // se desligou AutoSpin, garante que não existam timeouts pendentes que iniciam novo spin
-      // (timeoutRef é usado tanto para animação quanto para agendamento)
       clearTimeout(timeoutRef.current);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSpin]); // só reage à mudança do toggle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSpin]);
 
-  // ----- UI -----
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black to-blue-600 p-6 text-white">
       <div className="w-full max-w-md bg-gradient-to-br from-blue-900 to-purple-800 rounded-2xl p-4 shadow-2xl border-2 border-blue-400">
-        <h2 className="text-center text-2xl font-extrabold mb-3">Fortune's Segalla</h2>
+        <h2 className="text-center text-2xl font-extrabold mb-3">
+          Fortune&apos;s Segalla
+        </h2>
 
-        {/* Multiplicador visível quando sai */}
         <div className="text-center h-7 mb-2">
           {multiplier ? (
-            <span className="text-yellow-300 font-bold">Multiplicador: x{multiplier}</span>
+            <span className="text-yellow-300 font-bold">
+              Multiplicador: x{multiplier}
+            </span>
           ) : (
             <span className="text-gray-300">Multiplicador: —</span>
           )}
         </div>
 
         {/* Grid 3x3 */}
-        <div className="grid grid-rows-3 gap-2 bg-blue-950/50 p-3 rounded-lg mb-4">
+        <div className="grid grid-rows-3 gap-2 bg-blue-950/50 p-3 rounded-lg mb-2">
           {grid.map((row, r) => (
             <div key={r} className="flex justify-center gap-2">
-              {row.map((sym, c) => (
-                <div
-                  key={c}
-                  className={`w-20 h-20 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
-                    sym === "💎" ? "border-yellow-400" : "border-blue-500/60"
-                  }`}
-                >
-                  {sym}
-                </div>
-              ))}
+              {row.map((sym, c) => {
+                const key = `${r}-${c}`;
+                const isHighlighted = highlightedCells.has(key);
+                return (
+                  <div
+                    key={c}
+                    className={`w-20 h-20 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
+                      sym === "💎"
+                        ? "border-yellow-400"
+                        : "border-blue-500/60"
+                    } ${
+                      isHighlighted
+                        ? "ring-4 ring-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.9)] animate-pulse"
+                        : ""
+                    }`}
+                  >
+                    {sym}
+                  </div>
+                );
+              })}
             </div>
           ))}
+        </div>
+
+        {/* NOVO: ganho da rodada logo abaixo do grid */}
+        <div className="mb-4 text-center">
+          {lastWin > 0 ? (
+            <span className="inline-block px-3 py-1 rounded-full bg-yellow-300 text-purple-800 font-bold text-sm shadow-md">
+              R$ {lastWin.toFixed(2)}
+            </span>
+          ) : (
+            <span className="inline-block px-3 py-1 rounded-full bg-gray-700 text-gray-200 text-xs">
+              
+            </span>
+          )}
         </div>
 
         {/* Saldo / aposta / último ganho */}
@@ -276,10 +295,11 @@ export default function SlotMachine() {
 
           <div>
             <div className="text-xs text-gray-300">Aposta</div>
-            {/* input usa setBet (evita warning do editor) */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setBet((b) => Math.max(1, Math.round((b - 1) * 100) / 100))}
+                onClick={() =>
+                  setBet((b) => Math.max(1, Math.round((b - 1) * 100) / 100))
+                }
                 className="px-2 py-1 bg-purple-700 rounded"
               >
                 −
@@ -291,12 +311,18 @@ export default function SlotMachine() {
                 value={bet}
                 onChange={(e) => {
                   const v = parseFloat(e.target.value);
-                  setBet(Number.isFinite(v) ? Math.max(1, Math.round(v * 100) / 100) : 1);
+                  setBet(
+                    Number.isFinite(v)
+                      ? Math.max(1, Math.round(v * 100) / 100)
+                      : 1
+                  );
                 }}
                 className="w-20 text-center bg-transparent"
               />
               <button
-                onClick={() => setBet((b) => Math.round((b + 1) * 100) / 100)}
+                onClick={() =>
+                  setBet((b) => Math.round((b + 1) * 100) / 100)
+                }
                 className="px-2 py-1 bg-purple-700 rounded"
               >
                 +
@@ -310,7 +336,6 @@ export default function SlotMachine() {
           </div>
         </div>
 
-        {/* Botões */}
         <div className="grid grid-cols-3 gap-2 items-center">
           <button
             onClick={() => setAutoSpin((a) => !a)}
@@ -343,10 +368,7 @@ export default function SlotMachine() {
           </button>
         </div>
 
-        {/* Nota */}
-        <div className="mt-3 text-xs text-gray-300">
-       
-        </div>
+        <div className="mt-3 text-xs text-gray-300"></div>
       </div>
     </div>
   );
