@@ -294,7 +294,7 @@ export default function SlotMachine() {
           </div>
 
           <div>
-            <div className="text-xs text-gray-300">Aposta</div>
+            <div className="text-xs text-gray-300">Aposta:</div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() =>
