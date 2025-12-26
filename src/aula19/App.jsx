@@ -42,7 +42,6 @@ export default function SlotMachine() {
 
   const [highlightedCells, setHighlightedCells] = useState(() => new Set());
 
-  // Overlay grande prêmio
   const [winOverlay, setWinOverlay] = useState({
     visible: false,
     title: "",
@@ -50,7 +49,6 @@ export default function SlotMachine() {
   });
   const [winOverlayAmount, setWinOverlayAmount] = useState(0);
 
-  // Evento especial: gradiente -> vermelho -> travar símbolos
   const [specialEvent, setSpecialEvent] = useState({
     active: false,
     phase: "none", // "none" | "fading" | "active"
@@ -98,7 +96,6 @@ export default function SlotMachine() {
       });
     };
 
-    // Linhas
     for (let r = 0; r < 3; r++) {
       const row = finalGrid[r];
       const nonWild = row.filter((s) => s !== "💎");
@@ -118,7 +115,6 @@ export default function SlotMachine() {
       }
     }
 
-    // Diagonal principal
     const diag1 = [finalGrid[0][0], finalGrid[1][1], finalGrid[2][2]];
     const nonWildDiag1 = diag1.filter((s) => s !== "💎");
     if (nonWildDiag1.length === 0) {
@@ -133,7 +129,6 @@ export default function SlotMachine() {
       }
     }
 
-    // Diagonal secundária
     const diag2 = [finalGrid[0][2], finalGrid[1][1], finalGrid[2][0]];
     const nonWildDiag2 = diag2.filter((s) => s !== "💎");
     if (nonWildDiag2.length === 0) {
@@ -154,7 +149,6 @@ export default function SlotMachine() {
     return { payout, winCells };
   }
 
-  // animação do contador do overlay
   useEffect(() => {
     if (!winOverlay.visible) return;
 
@@ -194,7 +188,6 @@ export default function SlotMachine() {
     setWinOverlay((prev) => ({ ...prev, visible: false }));
     setWinOverlayAmount(0);
 
-    // reset evento antigo
     setSpecialEvent({
       active: false,
       phase: "none",
@@ -230,7 +223,6 @@ export default function SlotMachine() {
         );
         setGrid(finalGrid);
 
-        // 5% de chance para entrar no modo evento
         const triggerSpecial = Math.random() < 0.05;
 
         if (triggerSpecial) {
@@ -242,16 +234,13 @@ export default function SlotMachine() {
 
           const eventState = {
             active: true,
-            phase: "fading", // começando transição de cor
+            phase: "fading",
             targetSymbol,
             spinsLeft: 6,
           };
           setSpecialEvent(eventState);
-
-          // fase de drama: fundo transicionando + símbolos girando devagar sem parar
           startSpecialFading(eventState, finalGrid);
         } else {
-          // fluxo normal com multiplicador
           const mult = getMultiplier();
           setMultiplier(mult);
 
@@ -268,47 +257,37 @@ export default function SlotMachine() {
     timeoutRef.current = setTimeout(frameStep, frameDelay);
   }
 
-  // Fase de transição: gradiente -> vermelho, símbolos girando devagar
   function startSpecialFading(initialState, baseGrid) {
     let state = { ...initialState };
     let currentGrid = baseGrid;
 
     const spinForeverStep = () => {
-      // gira tudo devagar, só drama visual
       currentGrid = Array.from({ length: 3 }).map(() =>
         Array.from({ length: 3 }).map(() => getRandomSymbol())
       );
       setGrid(currentGrid);
 
-      // continua girando enquanto estiver na fase "fading"
       if (state.active && state.phase === "fading") {
-        timeoutRef.current = setTimeout(spinForeverStep, 250); // devagar
+        timeoutRef.current = setTimeout(spinForeverStep, 250);
       }
     };
 
-    // começa a girar devagar
     timeoutRef.current = setTimeout(spinForeverStep, 0);
 
-    // tempo da transição de cor até vermelho (1.5s)
     setTimeout(() => {
-      // quando a cor já está vermelha, inicia a fase ativa do evento
       state = {
         ...state,
         phase: "active",
       };
       setSpecialEvent(state);
-
-      // agora sim começa a lógica de travar símbolos e tentar fechar
       runSpecialEventActive(state, currentGrid);
     }, 1500);
   }
 
-  // Fase ativa do evento: trava símbolo alvo/WILD e tenta fechar em até 6 giros
   function runSpecialEventActive(initialState, initialGrid) {
     let state = { ...initialState };
     let currentGrid = initialGrid;
-
-    const slowDelay = 450; // mais devagar para drama
+    const slowDelay = 450;
 
     const spinStep = () => {
       if (!state.active || state.spinsLeft <= 0) {
@@ -451,18 +430,25 @@ export default function SlotMachine() {
     } else {
       clearTimeout(timeoutRef.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSpin]);
 
-  const isSpecialActive = specialEvent.active;
   const isFading = specialEvent.phase === "fading";
   const isEventActive = specialEvent.phase === "active";
 
-  // classe de fundo com transição suave de gradiente para vermelho
   const bgClass =
     isFading || isEventActive
       ? "bg-gradient-to-b from-black to-red-800 transition-colors duration-1000"
       : "bg-gradient-to-b from-black to-blue-600 transition-colors duration-1000";
+
+  const cardBgClass =
+    isFading || isEventActive
+      ? "bg-gradient-to-br from-red-900 to-red-700 border-red-400"
+      : "bg-gradient-to-br from-blue-900 to-purple-800 border-blue-400";
+
+  const gridBgClass =
+    isFading || isEventActive
+      ? "bg-red-950/60"
+      : "bg-blue-950/50";
 
   return (
     <>
@@ -485,7 +471,9 @@ export default function SlotMachine() {
       <div
         className={`min-h-screen flex items-center justify-center p-6 text-white ${bgClass}`}
       >
-        <div className="w-full max-w-md bg-gradient-to-br from-blue-900 to-purple-800 rounded-2xl p-4 shadow-2xl border-2 border-blue-400">
+        <div
+          className={`w-full max-w-md rounded-2xl p-4 shadow-2xl border-2 ${cardBgClass}`}
+        >
           <h2 className="text-center text-2xl font-extrabold mb-3">
             Fortune&apos;s Segalla
           </h2>
@@ -500,7 +488,9 @@ export default function SlotMachine() {
             )}
           </div>
 
-          <div className="grid grid-rows-3 gap-2 bg-blue-950/50 p-3 rounded-lg mb-2">
+          <div
+            className={`grid grid-rows-3 gap-2 ${gridBgClass} p-3 rounded-lg mb-2`}
+          >
             {grid.map((row, r) => (
               <div key={r} className="flex justify-center gap-2">
                 {row.map((sym, c) => {
@@ -512,6 +502,8 @@ export default function SlotMachine() {
                       className={`w-20 h-20 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
                         sym === "💎"
                           ? "border-yellow-400"
+                          : isFading || isEventActive
+                          ? "border-red-400/80"
                           : "border-blue-500/60"
                       } ${
                         isHighlighted
