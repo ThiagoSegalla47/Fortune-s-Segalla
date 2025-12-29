@@ -192,7 +192,6 @@ export default function SlotMachine() {
   function spin() {
     if (spinningRef.current) return;
     if (balanceRef.current < betRef.current) {
-      // sem saldo, cancela AutoSpin se tiver
       if (autoSpinRemainingRef.current > 0) setAutoSpinRemaining(0);
       return;
     }
@@ -419,7 +418,6 @@ export default function SlotMachine() {
     setIsSpinning(false);
     spinningRef.current = false;
 
-    // se autospin ainda tem giros, dispara o próximo
     if (autoSpinRemainingRef.current > 0 && balanceRef.current >= betRef.current) {
       setAutoSpinRemaining((prev) => prev - 1);
       timeoutRef.current = setTimeout(() => {
@@ -428,7 +426,6 @@ export default function SlotMachine() {
         }
       }, turbo ? 150 : 700);
     } else {
-      // acaba o autospin se zerou ou sem saldo
       setAutoSpinRemaining(0);
     }
   }
@@ -466,12 +463,9 @@ export default function SlotMachine() {
     setBetIndex((idx) => Math.min(BET_VALUES.length - 1, idx + 1));
   };
 
-  // clique no botão Auto: se já tem autospin, abre opções para sobrescrever; se não, idem
   const handleAutoSpinClick = () => {
     if (isSpinning) return;
-    // aqui, em vez de modal, usa um menu simples inline (poderia virar modal, se quiser)
-    // para manter simples, alterna um pequeno menu abaixo (estado local poderia ser adicionado)
-    // Para ficar direto: pergunta no prompt
+
     const choice = window.prompt(
       "Escolha giros automáticos: 10, 30, 80 ou 1000",
       "10"
@@ -481,13 +475,11 @@ export default function SlotMachine() {
     if (balanceRef.current < betRef.current) return;
 
     setAutoSpinRemaining(value);
-    // dispara o primeiro spin imediatamente
     if (!spinningRef.current) {
       spin();
     }
   };
 
-  // botão SPIN cancela AutoSpin se estiver ativo e não estiver girando
   const handleSpinButtonClick = () => {
     if (autoSpinRemainingRef.current > 0 && !isSpinning) {
       setAutoSpinRemaining(0);
@@ -523,7 +515,7 @@ export default function SlotMachine() {
       )}
 
       <div
-        className={`min-h-screen flex items-center justify-center p-6 text-white ${bgClass}`}
+        className={`min-h-screen flex items-center justify-center p-4 text-white ${bgClass}`}
       >
         <div
           className={`w-full max-w-md rounded-2xl p-4 shadow-2xl border-2 ${cardBgClass}`}
@@ -585,75 +577,109 @@ export default function SlotMachine() {
             )}
           </div>
 
-          <div className="flex justify-between items-center mb-3 text-sm">
-            <div>
-              <div className="text-xs text-gray-300">Saldo</div>
-              <div className="font-bold">R$ {balance.toFixed(2)}</div>
+          {/* Linha de saldo / aposta / último ganho aqui em cima, como HUD */}
+          <div className="flex justify-between items-center mb-3 text-xs">
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] text-gray-300">Saldo</span>
+              <span className="font-bold text-sm">
+                R$ {balance.toFixed(2)}
+              </span>
             </div>
 
-            <div>
-              <div className="text-xs text-gray-300">Aposta</div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-gray-300">Aposta</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleBetDown}
                   disabled={betIndex === 0}
-                  className="px-2 py-1 bg-purple-700 rounded disabled:opacity-40"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-700 border border-purple-300shadow-md text-xs disabled:opacity-40"
                 >
                   −
                 </button>
-                <div className="w-24 text-center">
+                <span className="min-w-[70px] text-center text-sm">
                   R$ {bet.toFixed(2)}
-                </div>
+                </span>
                 <button
                   onClick={handleBetUp}
                   disabled={betIndex === BET_VALUES.length - 1}
-                  className="px-2 py-1 bg-purple-700 rounded disabled:opacity-40"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-700 border border-purple-300 shadow-md text-xs disabled:opacity-40"
                 >
                   +
                 </button>
               </div>
             </div>
 
-            <div>
-              <div className="text-xs text-gray-300">Último ganho</div>
-              <div className="font-bold">R$ {lastWin.toFixed(2)}</div>
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] text-gray-300">Último ganho</span>
+              <span className="font-bold text-sm">
+                R$ {lastWin.toFixed(2)}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 items-center">
-            <button
-              onClick={handleAutoSpinClick}
-              disabled={isSpinning}
-              className={`justify-self-start px-3 py-2 rounded-xl font-bold ${
-                autoSpinRemaining > 0 ? "bg-green-500" : "bg-gray-600 hover:bg-gray-700"
-              } disabled:opacity-50`}
-            >
-              Auto
-            </button>
+          {/* Barra inferior estilo slot mobile */}
+          <div className="mt-2 pt-3 pb-2 px-3 bg-gradient-to-t from-purple-900 to-blue-700 rounded-[40px] border border-pink-300 shadow-inner">
+            <div className="flex items-center justify-between">
+              {/* Botão Turbo (esquerda) */}
+              <button
+                onClick={() => setTurbo((t) => !t)}
+                className="flex flex-col items-center text-yellow-200 text-[11px] font-semibold"
+              >
+                <div
+                  className={`w-11 h-11 rounded-full flex items-center justify-center border-2 ${
+                    turbo
+                      ? "bg-yellow-300 text-pink-900 border-yellow-200 shadow-[0_0_12px_rgba(250,204,21,0.9)]"
+                      : "bg-pink-800/60 border-pink-200"
+                  }`}
+                >
+                  <span className="text-xs font-bold">⚡</span>
+                </div>
+                <span className="mt-1 tracking-wide">TURBO</span>
+              </button>
 
-            <button
-              onClick={handleSpinButtonClick}
-              disabled={isSpinning && autoSpinRemaining === 0}
-              className={`justify-self-center w-20 h-20 rounded-full flex items-center justify-center text-lg font-extrabold transition transform ${
-                (isSpinning && autoSpinRemaining === 0) || balance < bet
-                  ? "bg-gray-500 text-gray-200 cursor-not-allowed"
-                  : "bg-yellow-300 text-purple-700 hover:scale-105 shadow-lg"
-              }`}
-            >
-              {spinButtonLabel}
-            </button>
+              {/* Botão SPIN central grande */}
+              <button
+                onClick={handleSpinButtonClick}
+                disabled={(isSpinning && autoSpinRemaining === 0) || balance < bet}
+                className={`relative flex flex-col items-center -mt-4`}
+              >
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center border-[3px] border-yellow-300 shadow-[0_0_18px_rgba(250,204,21,0.9)] bg-gradient-to-b from-yellow-400 to-yellow-700 ${
+                    (isSpinning && autoSpinRemaining === 0) || balance < bet
+                      ? "opacity-60 cursor-not-allowed"
+                      : "hover:scale-105 transition-transform"
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-yellow-200 flex items-center justify-center text-lg font-extrabold text-yellow-100">
+                    {spinButtonLabel === "..."
+                      ? "•••"
+                      : spinButtonLabel.startsWith("AUTO")
+                      ? "A"
+                      : "S"}
+                  </div>
+                </div>
+                <span className="mt-1 text-[11px] font-semibold text-yellow-200 tracking-widest">
+                  {spinButtonLabel.startsWith("AUTO")
+                    ? spinButtonLabel
+                    : "SPIN"}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setTurbo((t) => !t)}
-              className={`justify-self-end px-3 py-2 rounded-xl font-bold ${
-                turbo ? "bg-red-500" : "bg-blue-500 hover:bg-blue-600"
-              }`}
-            >
-              Turbo {turbo ? "ON" : "OFF"}
-            </button>
+              {/* Botão Auto (direita) */}
+              <button
+                onClick={handleAutoSpinClick}
+                disabled={isSpinning}
+                className="flex flex-col items-center text-yellow-200 text-[11px] font-semibold disabled:opacity-50"
+              >
+                <div className="w-11 h-11 rounded-full flex items-center justify-center border-2 border-pink-200 bg-pink-800/60">
+                  <span className="text-xs font-bold">▶</span>
+                </div>
+                <span className="mt-1 tracking-wide">AUTO</span>
+              </button>
+            </div>
           </div>
 
-          <div className="mt-3 text-xs text-gray-300"></div>
+          <div className="mt-2 text-center text-[10px] text-gray-300"></div>
         </div>
       </div>
     </>
