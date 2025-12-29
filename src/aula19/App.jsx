@@ -2,6 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 
 const SYMBOLS = ["🐉", "🍀", "💰", "🔔", "🍒", "⭐", "💎"];
 
+const BET_VALUES = [
+  0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0,
+  8.0, 12.0, 15.0, 16.0, 20.0, 24.0, 28.0, 30.0, 32.0,
+  36.0, 40.0, 45.0, 50.0, 75.0, 100.0, 120.0, 150.0, 250.0, 500.0,
+];
+
 const BASE_SYMBOL_PRIZES = {
   "🐉": 4,
   "🍀": 2,
@@ -31,8 +37,10 @@ export default function SlotMachine() {
     )
   );
 
-  const [balance, setBalance] = useState(1000);
-  const [bet, setBet] = useState(10);
+  const [balance, setBalance] = useState(10);
+  const [betIndex, setBetIndex] = useState(5); // índice inicial em BET_VALUES
+  const bet = BET_VALUES[betIndex];
+
   const [lastWin, setLastWin] = useState(0);
   const [multiplier, setMultiplier] = useState(null);
 
@@ -76,12 +84,15 @@ export default function SlotMachine() {
   useEffect(() => {
     balanceRef.current = balance;
   }, [balance]);
+
   useEffect(() => {
     betRef.current = bet;
   }, [bet]);
+
   useEffect(() => {
     autoSpinRef.current = autoSpin;
   }, [autoSpin]);
+
   useEffect(() => {
     spinningRef.current = isSpinning;
   }, [isSpinning]);
@@ -446,9 +457,15 @@ export default function SlotMachine() {
       : "bg-gradient-to-br from-blue-900 to-purple-800 border-blue-400";
 
   const gridBgClass =
-    isFading || isEventActive
-      ? "bg-red-950/60"
-      : "bg-blue-950/50";
+    isFading || isEventActive ? "bg-red-950/60" : "bg-blue-950/50";
+
+  const handleBetDown = () => {
+    setBetIndex((idx) => Math.max(0, idx - 1));
+  };
+
+  const handleBetUp = () => {
+    setBetIndex((idx) => Math.min(BET_VALUES.length - 1, idx + 1));
+  };
 
   return (
     <>
@@ -541,35 +558,19 @@ export default function SlotMachine() {
               <div className="text-xs text-gray-300">Aposta</div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() =>
-                    setBet((b) =>
-                      Math.max(1, Math.round((b - 1) * 100) / 100)
-                    )
-                  }
-                  className="px-2 py-1 bg-purple-700 rounded"
+                  onClick={handleBetDown}
+                  disabled={betIndex === 0}
+                  className="px-2 py-1 bg-purple-700 rounded disabled:opacity-40"
                 >
                   −
                 </button>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  value={bet}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    setBet(
-                      Number.isFinite(v)
-                        ? Math.max(1, Math.round(v * 100) / 100)
-                        : 1
-                    );
-                  }}
-                  className="w-20 text-center bg-transparent"
-                />
+                <div className="w-24 text-center">
+                  R$ {bet.toFixed(2)}
+                </div>
                 <button
-                  onClick={() =>
-                    setBet((b) => Math.round((b + 1) * 100) / 100)
-                  }
-                  className="px-2 py-1 bg-purple-700 rounded"
+                  onClick={handleBetUp}
+                  disabled={betIndex === BET_VALUES.length - 1}
+                  className="px-2 py-1 bg-purple-700 rounded disabled:opacity-40"
                 >
                   +
                 </button>
