@@ -8,6 +8,8 @@ const BET_VALUES = [
   36.0, 40.0, 45.0, 50.0, 75.0, 100.0, 120.0, 150.0, 250.0, 500.0,
 ];
 
+const AUTOSPIN_OPTIONS = [10, 30, 80, 1000];
+
 const BASE_SYMBOL_PRIZES = {
   "🐉": 4,
   "🍀": 2,
@@ -37,8 +39,8 @@ export default function SlotMachine() {
     )
   );
 
-  const [balance, setBalance] = useState(10);
-  const [betIndex, setBetIndex] = useState(5); // índice inicial em BET_VALUES
+  const [balance, setBalance] = useState(1000);
+  const [betIndex, setBetIndex] = useState(5);
   const bet = BET_VALUES[betIndex];
 
   const [lastWin, setLastWin] = useState(0);
@@ -46,7 +48,9 @@ export default function SlotMachine() {
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [turbo, setTurbo] = useState(false);
-  const [autoSpin, setAutoSpin] = useState(false);
+
+  // AutoSpin revisado
+  const [autoSpinRemaining, setAutoSpinRemaining] = useState(0);
 
   const [highlightedCells, setHighlightedCells] = useState(() => new Set());
 
@@ -59,14 +63,14 @@ export default function SlotMachine() {
 
   const [specialEvent, setSpecialEvent] = useState({
     active: false,
-    phase: "none", // "none" | "fading" | "active"
+    phase: "none",
     targetSymbol: null,
     spinsLeft: 0,
   });
 
   const balanceRef = useRef(balance);
   const betRef = useRef(bet);
-  const autoSpinRef = useRef(autoSpin);
+  const autoSpinRemainingRef = useRef(autoSpinRemaining);
   const spinningRef = useRef(isSpinning);
   const timeoutRef = useRef(null);
   const animationRef = useRef(null);
@@ -90,8 +94,8 @@ export default function SlotMachine() {
   }, [bet]);
 
   useEffect(() => {
-    autoSpinRef.current = autoSpin;
-  }, [autoSpin]);
+    autoSpinRemainingRef.current = autoSpinRemaining;
+  }, [autoSpinRemaining]);
 
   useEffect(() => {
     spinningRef.current = isSpinning;
@@ -188,7 +192,8 @@ export default function SlotMachine() {
   function spin() {
     if (spinningRef.current) return;
     if (balanceRef.current < betRef.current) {
-      if (autoSpinRef.current) setAutoSpin(false);
+      // sem saldo, cancela AutoSpin se tiver
+      if (autoSpinRemainingRef.current > 0) setAutoSpinRemaining(0);
       return;
     }
 
@@ -414,15 +419,17 @@ export default function SlotMachine() {
     setIsSpinning(false);
     spinningRef.current = false;
 
-    if (autoSpinRef.current) {
-      const pauseBetween = turbo ? 150 : 700;
+    // se autospin ainda tem giros, dispara o próximo
+    if (autoSpinRemainingRef.current > 0 && balanceRef.current >= betRef.current) {
+      setAutoSpinRemaining((prev) => prev - 1);
       timeoutRef.current = setTimeout(() => {
-        if (autoSpinRef.current && balanceRef.current >= betRef.current) {
+        if (autoSpinRemainingRef.current > 0 && !spinningRef.current) {
           spin();
-        } else {
-          setAutoSpin(false);
         }
-      }, pauseBetween);
+      }, turbo ? 150 : 700);
+    } else {
+      // acaba o autospin se zerou ou sem saldo
+      setAutoSpinRemaining(0);
     }
   }
 
@@ -434,14 +441,6 @@ export default function SlotMachine() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (autoSpin) {
-      if (!spinningRef.current) spin();
-    } else {
-      clearTimeout(timeoutRef.current);
-    }
-  }, [autoSpin]);
 
   const isFading = specialEvent.phase === "fading";
   const isEventActive = specialEvent.phase === "active";
@@ -466,6 +465,44 @@ export default function SlotMachine() {
   const handleBetUp = () => {
     setBetIndex((idx) => Math.min(BET_VALUES.length - 1, idx + 1));
   };
+
+  // clique no botão Auto: se já tem autospin, abre opções para sobrescrever; se não, idem
+  const handleAutoSpinClick = () => {
+    if (isSpinning) return;
+    // aqui, em vez de modal, usa um menu simples inline (poderia virar modal, se quiser)
+    // para manter simples, alterna um pequeno menu abaixo (estado local poderia ser adicionado)
+    // Para ficar direto: pergunta no prompt
+    const choice = window.prompt(
+      "Escolha giros automáticos: 10, 30, 80 ou 1000",
+      "10"
+    );
+    const value = Number(choice);
+    if (!AUTOSPIN_OPTIONS.includes(value)) return;
+    if (balanceRef.current < betRef.current) return;
+
+    setAutoSpinRemaining(value);
+    // dispara o primeiro spin imediatamente
+    if (!spinningRef.current) {
+      spin();
+    }
+  };
+
+  // botão SPIN cancela AutoSpin se estiver ativo e não estiver girando
+  const handleSpinButtonClick = () => {
+    if (autoSpinRemainingRef.current > 0 && !isSpinning) {
+      setAutoSpinRemaining(0);
+      clearTimeout(timeoutRef.current);
+      return;
+    }
+    spin();
+  };
+
+  const spinButtonLabel =
+    autoSpinRemaining > 0
+      ? `AUTO: ${autoSpinRemaining}`
+      : isSpinning
+      ? "..."
+      : "SPIN";
 
   return (
     <>
@@ -585,24 +622,25 @@ export default function SlotMachine() {
 
           <div className="grid grid-cols-3 gap-2 items-center">
             <button
-              onClick={() => setAutoSpin((a) => !a)}
+              onClick={handleAutoSpinClick}
+              disabled={isSpinning}
               className={`justify-self-start px-3 py-2 rounded-xl font-bold ${
-                autoSpin ? "bg-green-500" : "bg-gray-600 hover:bg-gray-700"
-              }`}
+                autoSpinRemaining > 0 ? "bg-green-500" : "bg-gray-600 hover:bg-gray-700"
+              } disabled:opacity-50`}
             >
-              Auto {autoSpin ? "ON" : "OFF"}
+              Auto
             </button>
 
             <button
-              onClick={spin}
-              disabled={isSpinning || balance < bet}
+              onClick={handleSpinButtonClick}
+              disabled={isSpinning && autoSpinRemaining === 0}
               className={`justify-self-center w-20 h-20 rounded-full flex items-center justify-center text-lg font-extrabold transition transform ${
-                isSpinning || balance < bet
+                (isSpinning && autoSpinRemaining === 0) || balance < bet
                   ? "bg-gray-500 text-gray-200 cursor-not-allowed"
                   : "bg-yellow-300 text-purple-700 hover:scale-105 shadow-lg"
               }`}
             >
-              {isSpinning ? "..." : "SPIN"}
+              {spinButtonLabel}
             </button>
 
             <button
