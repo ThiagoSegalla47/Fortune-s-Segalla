@@ -49,7 +49,6 @@ export default function SlotMachine() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [turbo, setTurbo] = useState(false);
 
-  // AutoSpin revisado
   const [autoSpinRemaining, setAutoSpinRemaining] = useState(0);
 
   const [highlightedCells, setHighlightedCells] = useState(() => new Set());
@@ -67,6 +66,9 @@ export default function SlotMachine() {
     targetSymbol: null,
     spinsLeft: 0,
   });
+
+  // NOVO: controle do modal de AutoSpin
+  const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
 
   const balanceRef = useRef(balance);
   const betRef = useRef(bet);
@@ -463,17 +465,18 @@ export default function SlotMachine() {
     setBetIndex((idx) => Math.min(BET_VALUES.length - 1, idx + 1));
   };
 
-  const handleAutoSpinClick = () => {
+  const openAutoSpinModal = () => {
     if (isSpinning) return;
+    setIsAutoModalOpen(true);
+  };
 
-    const choice = window.prompt(
-      "Escolha giros automáticos: 10, 30, 80 ou 1000",
-      "10"
-    );
-    const value = Number(choice);
+  const handleSelectAutoSpin = (value) => {
     if (!AUTOSPIN_OPTIONS.includes(value)) return;
-    if (balanceRef.current < betRef.current) return;
-
+    if (balanceRef.current < betRef.current) {
+      setIsAutoModalOpen(false);
+      return;
+    }
+    setIsAutoModalOpen(false);
     setAutoSpinRemaining(value);
     if (!spinningRef.current) {
       spin();
@@ -510,6 +513,34 @@ export default function SlotMachine() {
             <div className="text-3xl md:text-5xl font-extrabold text-green-300 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]">
               R$ {winOverlayAmount.toFixed(2)}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AUTOSPIN */}
+      {isAutoModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+          <div className="bg-gradient-to-br from-purple-900 to-blue-800 border border-pink-300 rounded-2xl p-4 w-72 shadow-2xl">
+            <h3 className="text-center text-sm font-bold text-yellow-200 mb-3">
+              Selecionar giros automáticos
+            </h3>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {AUTOSPIN_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => handleSelectAutoSpin(opt)}
+                  className="py-2 rounded-xl bg-gradient-to-b from-yellow-300 to-yellow-500 text-pink-900 text-sm font-bold shadow-[0_0_10px_rgba(250,204,21,0.7)] hover:scale-105 transition-transform"
+                >
+                  {opt} giros
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setIsAutoModalOpen(false)}
+              className="w-full py-1.5 rounded-xl bg-pink-800/70 text-xs text-yellow-100 font-semibold hover:bg-pink-700"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}
@@ -577,7 +608,6 @@ export default function SlotMachine() {
             )}
           </div>
 
-          {/* Linha de saldo / aposta / último ganho aqui em cima, como HUD */}
           <div className="flex justify-between items-center mb-3 text-xs">
             <div className="flex flex-col items-start">
               <span className="text-[10px] text-gray-300">Saldo</span>
@@ -620,7 +650,7 @@ export default function SlotMachine() {
           {/* Barra inferior estilo slot mobile */}
           <div className="mt-2 pt-3 pb-2 px-3 bg-gradient-to-t from-purple-900 to-blue-700 rounded-[40px] border border-pink-300 shadow-inner">
             <div className="flex items-center justify-between">
-              {/* Botão Turbo (esquerda) */}
+              {/* Botão Turbo */}
               <button
                 onClick={() => setTurbo((t) => !t)}
                 className="flex flex-col items-center text-yellow-200 text-[11px] font-semibold"
@@ -637,11 +667,13 @@ export default function SlotMachine() {
                 <span className="mt-1 tracking-wide">TURBO</span>
               </button>
 
-              {/* Botão SPIN central grande */}
+              {/* Botão SPIN */}
               <button
                 onClick={handleSpinButtonClick}
-                disabled={(isSpinning && autoSpinRemaining === 0) || balance < bet}
-                className={`relative flex flex-col items-center -mt-4`}
+                disabled={
+                  (isSpinning && autoSpinRemaining === 0) || balance < bet
+                }
+                className="relative flex flex-col items-center -mt-4"
               >
                 <div
                   className={`w-20 h-20 rounded-full flex items-center justify-center border-[3px] border-yellow-300 shadow-[0_0_18px_rgba(250,204,21,0.9)] bg-gradient-to-b from-yellow-400 to-yellow-700 ${
@@ -665,9 +697,9 @@ export default function SlotMachine() {
                 </span>
               </button>
 
-              {/* Botão Auto (direita) */}
+              {/* Botão Auto */}
               <button
-                onClick={handleAutoSpinClick}
+                onClick={openAutoSpinModal}
                 disabled={isSpinning}
                 className="flex flex-col items-center text-yellow-200 text-[11px] font-semibold disabled:opacity-50"
               >
