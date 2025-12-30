@@ -67,7 +67,6 @@ export default function SlotMachine() {
     spinsLeft: 0,
   });
 
-  // NOVO: controle do modal de AutoSpin
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
 
   const balanceRef = useRef(balance);
@@ -76,6 +75,77 @@ export default function SlotMachine() {
   const spinningRef = useRef(isSpinning);
   const timeoutRef = useRef(null);
   const animationRef = useRef(null);
+
+  // SONS
+  const spinSoundRef = useRef(null);
+  const specialEventSoundRef = useRef(null);
+  const bigWinSoundRef = useRef(null);
+  const bgMusicRef = useRef(null);
+  const bgMusicStartedRef = useRef(false);
+
+  useEffect(() => {
+    spinSoundRef.current = new Audio("/sounds/spin.mp3");
+    specialEventSoundRef.current = new Audio("/sounds/special.mp3");
+    bigWinSoundRef.current = new Audio("/sounds/bigwin.mp3");
+    bgMusicRef.current = new Audio("/sounds/bg-music.mp3");
+
+    if (bgMusicRef.current) {
+      bgMusicRef.current.loop = true;
+      bgMusicRef.current.volume = 0.35;
+    }
+
+    return () => {
+      if (spinSoundRef.current) spinSoundRef.current.pause();
+      if (specialEventSoundRef.current) specialEventSoundRef.current.pause();
+      if (bigWinSoundRef.current) bigWinSoundRef.current.pause();
+      if (bgMusicRef.current) bgMusicRef.current.pause();
+    };
+  }, []);
+
+  const playSpinSound = () => {
+    const a = spinSoundRef.current;
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+      a.play();
+    } catch {}
+  };
+
+  const playSpecialEventSound = () => {
+    const a = specialEventSoundRef.current;
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+      a.play();
+    } catch {}
+  };
+
+  const stopSpecialEventSound = () => {
+    const a = specialEventSoundRef.current;
+    if (!a) return;
+    try {
+      a.pause();
+      a.currentTime = 0;
+    } catch {}
+  };
+
+  const playBigWinSound = () => {
+    const a = bigWinSoundRef.current;
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+      a.play();
+    } catch {}
+  };
+
+  const ensureBgMusicPlaying = () => {
+    const a = bgMusicRef.current;
+    if (!a || bgMusicStartedRef.current) return;
+    try {
+      a.play();
+      bgMusicStartedRef.current = true;
+    } catch {}
+  };
 
   const SYMBOL_PRIZES = {
     "⭐": 0.2,
@@ -198,6 +268,8 @@ export default function SlotMachine() {
       return;
     }
 
+    playSpinSound();
+
     setIsSpinning(true);
     spinningRef.current = true;
 
@@ -211,6 +283,9 @@ export default function SlotMachine() {
       targetSymbol: null,
       spinsLeft: 0,
     });
+
+    // garante que, se havia som de evento, ele pare
+    stopSpecialEventSound();
 
     setBalance((prev) => {
       const next = Math.round((prev - betRef.current) * 100) / 100;
@@ -256,6 +331,9 @@ export default function SlotMachine() {
             spinsLeft: 6,
           };
           setSpecialEvent(eventState);
+
+          playSpecialEventSound();
+
           startSpecialFading(eventState, finalGrid);
         } else {
           const mult = getMultiplier();
@@ -314,12 +392,16 @@ export default function SlotMachine() {
           null
         );
         finishSpinWithPayout(currentGrid, payout, winCells);
+
         setSpecialEvent({
           active: false,
           phase: "none",
           targetSymbol: null,
           spinsLeft: 0,
         });
+
+        // evento terminou -> para som
+        stopSpecialEventSound();
         return;
       }
 
@@ -354,6 +436,8 @@ export default function SlotMachine() {
           targetSymbol: null,
           spinsLeft: 0,
         });
+
+        stopSpecialEventSound();
         return;
       }
 
@@ -378,6 +462,8 @@ export default function SlotMachine() {
           targetSymbol: null,
           spinsLeft: 0,
         });
+
+        stopSpecialEventSound();
       }
     };
 
@@ -410,6 +496,8 @@ export default function SlotMachine() {
           title,
           finalAmount: payout,
         });
+
+        playBigWinSound();
 
         setTimeout(() => {
           setWinOverlay((prev) => ({ ...prev, visible: false }));
@@ -467,6 +555,7 @@ export default function SlotMachine() {
 
   const openAutoSpinModal = () => {
     if (isSpinning) return;
+    ensureBgMusicPlaying();
     setIsAutoModalOpen(true);
   };
 
@@ -484,12 +573,18 @@ export default function SlotMachine() {
   };
 
   const handleSpinButtonClick = () => {
+    ensureBgMusicPlaying();
     if (autoSpinRemainingRef.current > 0 && !isSpinning) {
       setAutoSpinRemaining(0);
       clearTimeout(timeoutRef.current);
       return;
     }
     spin();
+  };
+
+  const handleToggleTurbo = () => {
+    ensureBgMusicPlaying();
+    setTurbo((t) => !t);
   };
 
   const spinButtonLabel =
@@ -517,7 +612,6 @@ export default function SlotMachine() {
         </div>
       )}
 
-      {/* MODAL AUTOSPIN */}
       {isAutoModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
           <div className="bg-gradient-to-br from-purple-900 to-blue-800 border border-pink-300 rounded-2xl p-4 w-72 shadow-2xl">
@@ -647,12 +741,10 @@ export default function SlotMachine() {
             </div>
           </div>
 
-          {/* Barra inferior estilo slot mobile */}
           <div className="mt-2 pt-3 pb-2 px-3 bg-gradient-to-t from-purple-900 to-blue-700 rounded-[40px] border border-pink-300 shadow-inner">
             <div className="flex items-center justify-between">
-              {/* Botão Turbo */}
               <button
-                onClick={() => setTurbo((t) => !t)}
+                onClick={handleToggleTurbo}
                 className="flex flex-col items-center text-yellow-200 text-[11px] font-semibold"
               >
                 <div
@@ -667,7 +759,6 @@ export default function SlotMachine() {
                 <span className="mt-1 tracking-wide">TURBO</span>
               </button>
 
-              {/* Botão SPIN */}
               <button
                 onClick={handleSpinButtonClick}
                 disabled={
@@ -697,7 +788,6 @@ export default function SlotMachine() {
                 </span>
               </button>
 
-              {/* Botão Auto */}
               <button
                 onClick={openAutoSpinModal}
                 disabled={isSpinning}
