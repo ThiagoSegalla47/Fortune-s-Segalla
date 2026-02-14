@@ -239,7 +239,7 @@ export default function SlotMachine() {
   useEffect(() => {
     if (!winOverlay.visible) return;
 
-    const duration = 1200;
+    const duration = 2000;
     const start = performance.now();
     const target = winOverlay.finalAmount;
 
@@ -294,7 +294,7 @@ export default function SlotMachine() {
     });
 
     const frames = turbo ? 6 : 12;
-    const frameDelay = turbo ? 60 : 100;
+    const frameDelay = turbo ? 50 : 100;
 
     let frame = 0;
     clearTimeout(timeoutRef.current);
