@@ -69,6 +69,9 @@ export default function SlotMachine() {
 
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
 
+  // NOVO: ameaça de evento (tela vermelha rápida)
+  const [threatEventActive, setThreatEventActive] = useState(false);
+
   const balanceRef = useRef(balance);
   const betRef = useRef(bet);
   const autoSpinRemainingRef = useRef(autoSpinRemaining);
@@ -284,6 +287,9 @@ export default function SlotMachine() {
       spinsLeft: 0,
     });
 
+    // ameaça sempre começa desligada
+    setThreatEventActive(false);
+
     // garante que, se havia som de evento, ele pare
     stopSpecialEventSound();
 
@@ -298,6 +304,18 @@ export default function SlotMachine() {
 
     let frame = 0;
     clearTimeout(timeoutRef.current);
+
+    // sorteios de evento e ameaça
+    const triggerSpecial = Math.random() < 0.05; // evento real
+    const triggerThreat = !triggerSpecial && Math.random() < 0.07; // ameaça só se não tiver evento verdadeiro
+
+    // se for ameaça, liga rápido e desliga antes do fim do spin
+    if (triggerThreat) {
+      setThreatEventActive(true);
+      setTimeout(() => {
+        setThreatEventActive(false);
+      }, frameDelay * (frames - 3)); // desliga ~3 frames antes de parar
+    }
 
     function frameStep() {
       setGrid(
@@ -315,7 +333,8 @@ export default function SlotMachine() {
         );
         setGrid(finalGrid);
 
-        const triggerSpecial = Math.random() < 0.05;
+        // garante que ameaça esteja desligada ao final
+        setThreatEventActive(false);
 
         if (triggerSpecial) {
           const nonWildSymbols = SYMBOLS.filter((s) => s !== "💎");
@@ -400,7 +419,6 @@ export default function SlotMachine() {
           spinsLeft: 0,
         });
 
-        // evento terminou -> para som
         stopSpecialEventSound();
         return;
       }
@@ -532,18 +550,21 @@ export default function SlotMachine() {
   const isFading = specialEvent.phase === "fading";
   const isEventActive = specialEvent.phase === "active";
 
+  // ameaça compartilha o mesmo "tema vermelho" visual
   const bgClass =
-    isFading || isEventActive
-      ? "bg-gradient-to-b from-black to-red-800 transition-colors duration-1000"
-      : "bg-gradient-to-b from-black to-blue-600 transition-colors duration-1000";
+    isFading || isEventActive || threatEventActive
+      ? "bg-gradient-to-b from-black to-red-800 transition-colors duration-500"
+      : "bg-gradient-to-b from-black to-blue-600 transition-colors duration-500";
 
   const cardBgClass =
-    isFading || isEventActive
+    isFading || isEventActive || threatEventActive
       ? "bg-gradient-to-br from-red-900 to-red-700 border-red-400"
       : "bg-gradient-to-br from-blue-900 to-purple-800 border-blue-400";
 
   const gridBgClass =
-    isFading || isEventActive ? "bg-red-950/60" : "bg-blue-950/50";
+    isFading || isEventActive || threatEventActive
+      ? "bg-red-950/60"
+      : "bg-blue-950/50";
 
   const handleBetDown = () => {
     setBetIndex((idx) => Math.max(0, idx - 1));
@@ -673,7 +694,7 @@ export default function SlotMachine() {
                       className={`w-20 h-20 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
                         sym === "💎"
                           ? "border-yellow-400"
-                          : isFading || isEventActive
+                          : isFading || isEventActive || threatEventActive
                           ? "border-red-400/80"
                           : "border-blue-500/60"
                       } ${
