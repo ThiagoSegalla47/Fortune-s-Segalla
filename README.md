@@ -1,5 +1,4 @@
-Fortune’s Segalla 🎰
-Visão geral
+
 Fortune’s Segalla é um jogo estilo tigrinho feito em React que simula uma máquina caça-níquel com:
 Símbolos especiais, incluindo WILD (💎).
 Multiplicadores aleatórios (x2, x5, x10).
