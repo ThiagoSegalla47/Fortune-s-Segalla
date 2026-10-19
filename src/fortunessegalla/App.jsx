@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import MultiplierReel from "./MultiplierReel.jsx";
+import { applyRoundMultiplier, createMultiplierSpin } from "./multiplierReel.js";
 
 const SYMBOLS = ["🐉", "🍀", "💰", "🔔", "🍒", "⭐", "💎"];
 
@@ -10,20 +12,8 @@ const BET_VALUES = [
 
 const AUTOSPIN_OPTIONS = [10, 30, 80, 1000];
 
-const MULTIPLIER_REEL_ITEMS = [
-  null, 2, null, 5, null, 10, null, 2, null, 5, null, 10, null,
-];
-
 function getRandomSymbol() {
   return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-}
-
-function getRandomMultiplierResult() {
-  const r = Math.random();
-  if (r < 0.005) return 10;
-  if (r < 0.04) return 5;
-  if (r < 0.22) return 2;
-  return null;
 }
 
 function createRandomGrid() {
@@ -63,7 +53,7 @@ export default function SlotMachine() {
   const bet = BET_VALUES[betIndex];
 
   const [lastWin, setLastWin] = useState(0);
-  const [multiplier, setMultiplier] = useState(null);
+  const [roundMultiplier, setRoundMultiplier] = useState(null);
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [turbo, setTurbo] = useState(false);
@@ -89,8 +79,14 @@ export default function SlotMachine() {
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
   const [threatEventActive, setThreatEventActive] = useState(false);
 
-  const [multiplierOrbOffset, setMultiplierOrbOffset] = useState(0);
-  const [isMultiplierOrbSpinning, setIsMultiplierOrbSpinning] = useState(false);
+  const [multiplierReel, setMultiplierReel] = useState({
+    id: 0,
+    items: [1, 2, 5, 10],
+    stopPosition: 1.5,
+    duration: 0,
+  });
+  const [isMultiplierSpinning, setIsMultiplierSpinning] = useState(false);
+  const multiplierReelRef = useRef(multiplierReel);
 
   const balanceRef = useRef(balance);
   const betRef = useRef(bet);
@@ -117,9 +113,6 @@ export default function SlotMachine() {
     "🐉": 4,
     "💎": 8,
   };
-
-  const ORB_ITEM_WIDTH = 44;
-  const ORB_VIEW_WIDTH = 44;
 
   const effectiveBet = guaranteedWinEnabled ? bet * 5 : bet;
 
@@ -264,8 +257,7 @@ export default function SlotMachine() {
       }
     }
 
-    if (mult) payout *= mult;
-    payout = Math.round(payout * 100) / 100;
+    payout = applyRoundMultiplier(payout, mult);
 
     return { payout, winCells };
   }
@@ -292,28 +284,6 @@ export default function SlotMachine() {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [winOverlay.visible, winOverlay.finalAmount]);
-
-  function startMultiplierOrbSpin(finalMultiplier, duration) {
-    setIsMultiplierOrbSpinning(true);
-
-    const indices = MULTIPLIER_REEL_ITEMS
-      .map((item, idx) => ({ item, idx }))
-      .filter((entry) => entry.item === finalMultiplier)
-      .map((entry) => entry.idx);
-
-    const targetIndex = indices[Math.floor(Math.random() * indices.length)];
-    const totalItems = MULTIPLIER_REEL_ITEMS.length;
-    const extraLoops = turbo ? 18 : 26;
-    const targetOffset = -((extraLoops * totalItems + targetIndex) * ORB_ITEM_WIDTH);
-
-    requestAnimationFrame(() => {
-      setMultiplierOrbOffset(targetOffset);
-    });
-
-    setTimeout(() => {
-      setIsMultiplierOrbSpinning(false);
-    }, duration + 50);
-  }
 
   function buildFinalGrid() {
     if (guaranteedWinEnabledRef.current) {
@@ -342,7 +312,8 @@ export default function SlotMachine() {
     setHighlightedCells(new Set());
     setWinOverlay((prev) => ({ ...prev, visible: false }));
     setWinOverlayAmount(0);
-    setMultiplier(null);
+    setRoundMultiplier(null);
+    setLastWin(0);
 
     setSpecialEvent({
       active: false,
@@ -362,8 +333,8 @@ export default function SlotMachine() {
       return next;
     });
 
-    const frames = turbo ? 6 : 12;
-    const frameDelay = turbo ? 50 : 100;
+    const frames = turbo ? 10 : 16;
+    const frameDelay = turbo ? 70 : 100;
     const baseSpinDuration = frames * frameDelay;
 
     let frame = 0;
@@ -371,9 +342,18 @@ export default function SlotMachine() {
 
     const triggerSpecial = Math.random() < 0.05;
     const triggerThreat = !triggerSpecial && Math.random() < 0.07;
-    const rolledMultiplier = getRandomMultiplierResult();
-
-    startMultiplierOrbSpin(rolledMultiplier, baseSpinDuration);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reelResult = createMultiplierSpin(Math.random, multiplierReelRef.current, reducedMotion);
+    // The payout uses the exact same stop position as the visible strip.
+    const rolledMultiplier = reelResult.multiplier;
+    const nextReel = {
+      ...reelResult,
+      id: multiplierReelRef.current.id + 1,
+      duration: baseSpinDuration,
+    };
+    multiplierReelRef.current = nextReel;
+    setMultiplierReel(nextReel);
+    setIsMultiplierSpinning(true);
 
     if (triggerThreat) {
       setThreatEventActive(true);
@@ -392,7 +372,8 @@ export default function SlotMachine() {
         const finalGrid = buildFinalGrid();
         setGrid(finalGrid);
         setThreatEventActive(false);
-        setMultiplier(rolledMultiplier);
+        setRoundMultiplier(rolledMultiplier);
+        setIsMultiplierSpinning(false);
 
         if (triggerSpecial) {
           const nonWildSymbols = SYMBOLS.filter((s) => s !== "💎");
@@ -598,13 +579,6 @@ export default function SlotMachine() {
 
   const gridBgClass = dangerTheme ? "bg-red-950/60" : "bg-blue-950/50";
 
-  const repeatedOrbItems = [
-    ...MULTIPLIER_REEL_ITEMS,
-    ...MULTIPLIER_REEL_ITEMS,
-    ...MULTIPLIER_REEL_ITEMS,
-    ...MULTIPLIER_REEL_ITEMS,
-  ];
-
   const handleBetDown = () => {
     setBetIndex((idx) => Math.max(0, idx - 1));
   };
@@ -709,17 +683,22 @@ export default function SlotMachine() {
             Fortune&apos;s Segalla
           </h2>
 
-          <div className="flex items-center justify-center gap-3 mb-2">
+          <div className="mx-auto mb-3 w-full max-w-[320px]">
+            <MultiplierReel
+              reel={multiplierReel}
+              multiplier={roundMultiplier}
+              isSpinning={isMultiplierSpinning}
+            />
             <div className={`grid grid-rows-3 gap-2 ${gridBgClass} p-3 rounded-lg`}>
               {grid.map((row, r) => (
-                <div key={r} className="flex justify-center gap-2">
+                <div key={r} className="grid grid-cols-3 gap-2">
                   {row.map((sym, c) => {
                     const key = `${r}-${c}`;
                     const isHighlighted = highlightedCells.has(key);
                     return (
                       <div
                         key={c}
-                        className={`w-20 h-20 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
+                        className={`aspect-square min-w-0 flex items-center justify-center text-3xl rounded-lg bg-gradient-to-br from-pink-600/30 to-purple-800/30 border-2 ${
                           sym === "💎"
                             ? "border-yellow-400"
                             : dangerTheme
@@ -739,54 +718,14 @@ export default function SlotMachine() {
               ))}
             </div>
 
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-yellow-200/80">
-                Mult
-              </div>
-
-              <div className="relative w-24 h-24 rounded-full border-2 border-pink-300 bg-gradient-to-br from-fuchsia-500 via-purple-700 to-indigo-900 shadow-[0_0_18px_rgba(244,114,182,0.35)] overflow-hidden flex items-center justify-center">
-                <div className="absolute inset-[7px] rounded-full border border-white/20 bg-black/25 backdrop-blur-sm" />
-                <div className="absolute inset-0 rounded-full pointer-events-none bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.35),transparent_35%),radial-gradient(circle_at_70%_75%,rgba(255,255,255,0.08),transparent_30%)]" />
-
-                <div className="absolute z-10 w-[44px] h-[28px] rounded-full overflow-hidden border border-yellow-200/60 bg-black/55 shadow-inner">
-                  <div
-                    className="flex items-center h-full"
-                    style={{
-                      width: `${repeatedOrbItems.length * ORB_ITEM_WIDTH}px`,
-                      transform: `translateX(${multiplierOrbOffset + ORB_VIEW_WIDTH / 2 - ORB_ITEM_WIDTH / 2}px)`,
-                      transition: isMultiplierOrbSpinning
-                        ? `transform ${turbo ? 0.35 : 0.75}s cubic-bezier(0.16, 1, 0.3, 1)`
-                        : "none",
-                    }}
-                  >
-                    {repeatedOrbItems.map((item, idx) => (
-                      <div
-                        key={`${item}-${idx}`}
-                        className="w-[44px] min-w-[44px] h-full flex items-center justify-center text-sm font-extrabold"
-                      >
-                        {item ? (
-                          <span className="text-yellow-200 drop-shadow-[0_0_8px_rgba(250,204,21,0.55)]">
-                            {item}x
-                          </span>
-                        ) : (
-                          <span className="text-white/10">•</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="absolute z-20 h-[38px] w-[2px] bg-yellow-300/80 shadow-[0_0_8px_rgba(250,204,21,0.8)] rounded-full" />
-              </div>
-
-              <div className="h-4 text-xs font-bold text-yellow-200">
-                {multiplier ? `${multiplier}x` : "—"}
-              </div>
-
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <span className="text-xs text-yellow-100/80">Ganho Certo</span>
               <button
                 onClick={handleToggleGuaranteedWin}
                 disabled={isSpinning}
-                className={`mt-1 w-24 rounded-full border-2 px-2 py-1 text-[11px] font-extrabold tracking-wider transition-all ${
+                aria-label="Ganho Certo"
+                aria-pressed={guaranteedWinEnabled}
+                className={`w-20 rounded-full border-2 px-2 py-1 text-[11px] font-extrabold tracking-wider transition-all ${
                   guaranteedWinEnabled
                     ? "bg-green-500 border-green-200 text-white shadow-[0_0_14px_rgba(34,197,94,0.7)]"
                     : "bg-red-600 border-red-200 text-white shadow-[0_0_14px_rgba(220,38,38,0.55)]"
@@ -794,10 +733,6 @@ export default function SlotMachine() {
               >
                 {guaranteedWinEnabled ? "ON" : "OFF"}
               </button>
-
-              <div className="text-[10px] text-center text-yellow-100/80 leading-tight max-w-[90px]">
-                Ganho Certo
-              </div>
             </div>
           </div>
 
